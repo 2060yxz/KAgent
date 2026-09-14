@@ -228,3 +228,86 @@ async def test_network_budget_survives_parent_retry(monkeypatch):
 
     # 预算起点在包装创建时固定，网络 sleep 累计不超过 5s（不是 5 × 父类重试份数）。
     assert 0 < sum(sleeps) <= 5
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 429, 500, 502, 503, 504])
+def test_http_status_takes_precedence_over_error_text(status):
+    """真实 SDK 状态码决定分类，不受响应文本中的网络关键词影响。"""
+    import httpx
+    import openai
+
+    request = httpx.Request("POST", "https://example.invalid/v1/chat/completions")
+    error = openai.APIStatusError(
+        "Unsupported timeout parameter" if status < 500 else "upstream overloaded",
+        response=httpx.Response(status, request=request),
+        body=None,
+    )
+    assert _is_network_error(error) is (status >= 500)
+
+
+def test_standard_model_errors_take_precedence_over_text_and_cause():
+    """标准模型错误保留业务分类，外层未知包装不会覆盖内层状态。"""
+    from langchain_core.exceptions import ModelAPIError, ModelInvalidRequestError
+
+    invalid = ModelInvalidRequestError("Unsupported parameter: timeout")
+    invalid.__cause__ = ConnectionError("Connection refused")
+    assert _is_network_error(invalid) is False
+    wrapper = RuntimeError("Connection timeout in model wrapper")
+    wrapper.__cause__ = invalid
+    assert _is_network_error(wrapper) is False
+    assert _is_network_error(ModelAPIError("upstream overloaded")) is True
+
+
+@pytest.mark.parametrize("sync", [False, True])
+@pytest.mark.parametrize("kind", ["server", "stream"])
+@pytest.mark.asyncio
+async def test_real_network_errors_exhaust_budget_without_error_message(sync, kind):
+    """真实服务端和流式传输异常预算耗尽后抛出原异常，不返回错误消息。"""
+    import httpx
+    import openai
+
+    request = httpx.Request("POST", "https://example.invalid/v1/chat/completions")
+    error = (
+        openai.InternalServerError("Internal server error", response=httpx.Response(500, request=request), body=None)
+        if kind == "server"
+        else httpx.RemoteProtocolError(
+            "peer closed connection without sending complete message body (incomplete chunked read)"
+        )
+    )
+    mw = NetworkRetryMiddleware(network_budget_seconds=0, initial_delay=0, jitter=False)
+
+    def handler(_request):
+        """持续抛出同一个真实异常。"""
+        raise error
+
+    async def async_handler(_request):
+        """异步调用复用相同异常。"""
+        return handler(_request)
+
+    with pytest.raises(type(error)) as raised:
+        if sync:
+            mw.wrap_model_call(object(), handler)
+        else:
+            await mw.awrap_model_call(object(), async_handler)
+    assert raised.value is error
+
+
+@pytest.mark.asyncio
+async def test_invalid_model_request_with_timeout_text_is_not_retried():
+    """非法参数即使包含 timeout 也立即失败，不进入网络等待。"""
+    from langchain_core.exceptions import ModelInvalidRequestError
+
+    error = ModelInvalidRequestError("Unsupported parameter: timeout")
+    calls = 0
+    mw = NetworkRetryMiddleware(network_budget_seconds=0.01, network_initial_delay=0)
+
+    async def handler(_request):
+        """记录非法请求实际执行次数。"""
+        nonlocal calls
+        calls += 1
+        raise error
+
+    with pytest.raises(ModelInvalidRequestError) as raised:
+        await mw.awrap_model_call(object(), handler)
+    assert raised.value is error
+    assert calls == 1

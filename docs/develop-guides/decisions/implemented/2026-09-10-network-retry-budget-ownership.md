@@ -32,11 +32,11 @@ Owner：backend/package/yuxi/agents/middlewares/network_retry.py
 
 网络错误的唯一重试入口是 `NetworkRetryMiddleware` 自身的预算循环，`network_budget_seconds` 是真实上限，不再有外层放大。非网络错误重试语义与 `ModelRetryMiddleware` 一致（`default_retry_on` 的 `ModelError.is_retryable` 判定保留）。
 
-网络重试参数用 `network_` 前缀（`network_budget_seconds`/`network_initial_delay`/`network_max_delay`）与父类非网络重试的 `initial_delay`/`max_delay` 区分。`_is_network_error` 与 `_retry_non_network_errors` 均为模块私有（不再从 `__init__.py` 导出），且只依赖公开的 `ModelError`，不再 import `langchain.agents.middleware._retry` 私有模块。
+网络重试参数用 `network_` 前缀（`network_budget_seconds`/`network_initial_delay`/`network_max_delay`）与父类非网络重试的 `initial_delay`/`max_delay` 区分。`_is_network_error` 与 `_retry_non_network_errors` 均为模块私有（不再从 `__init__.py` 导出），且依赖公开的 LangChain 模型异常与 HTTPX 异常，不再 import `langchain.agents.middleware._retry` 私有模块。
 
 ## 验证
 
-`backend/test/unit/agents/test_network_retry.py`（22 passed）：
+`backend/test/unit/agents/test_network_retry.py`：
 
 - `test_network_budget_honored_and_fails_explicitly`：虚拟时钟下持续 `ConnectionError`，累计等待受单次 600s 预算约束，最终**抛出**异常而非返回含错误文本的响应；
 - `test_non_network_error_retried_by_max_retries_then_continue`：非网络错误按 `max_retries` 重试后 `on_failure=continue` 返回错误 AIMessage；
@@ -44,3 +44,11 @@ Owner：backend/package/yuxi/agents/middlewares/network_retry.py
 - `test_non_network_error_retry_succeeds_after_backoff`：非网络错误重试成功后正常返回；
 - `test_network_then_non_network_error_routes_to_parent_retry`：网络异常重试后遇到非网络异常，交给父类按 `max_retries` 重试成功；
 - `test_network_budget_survives_parent_retry`：网络 → 非网络 → 网络的序列下，预算起点跨父类重试保持，累计等待不被放大。
+
+## 异常分类边界
+
+`_is_network_error` 沿异常链优先读取 HTTP 4xx/5xx、LangChain 标准模型异常与 HTTPX 传输异常。4xx 保持非网络重试语义；5xx、连接、超时及远端流式协议中断进入网络预算。标准 `ModelError` 的其他类型保持非网络语义，未知包装的文本不能覆盖内层明确的分类。仅在整条链都没有结构化分类时使用原有文本兜底。
+
+只扩充关键词会继续依赖供应商响应措辞，无法可靠区分非法 `timeout` 参数与请求超时；逐个接入供应商 SDK 会增加重复映射。因此复用已有 LangChain/HTTPX 依赖和 SDK 的 HTTP 状态，不引入依赖或配置。该修复闭合既有网络错误契约，直接更新 implemented 记录；总预算计时规则和非网络错误的父类处理策略保持原语义。
+
+回归证据由 `test_network_retry.py` 中真实 SDK 状态码、标准模型错误、同步/异步预算耗尽与非法参数测试提供。恢复关键词优先实现时，这些案例因错误分类、返回错误 AIMessage 或重复执行非法请求失败。真实 worker 断网恢复、最终 Run 状态与用户取消仍需 E2E 验证，分类单测不证明这些结果。
