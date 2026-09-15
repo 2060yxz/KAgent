@@ -1,8 +1,9 @@
-"""真实 PostgreSQL 验证：骨架图读取时，中断从 checkpoint pending writes 恢复。
+"""真实 PostgreSQL 验证：中断从 checkpoint pending writes 恢复。
 
-单元测试用 InMemorySaver 验证了 ``_read_pending_interrupt`` 的语义；本集成测试用
-真实 PostgreSQL 的 AsyncPostgresSaver 验证「持久化的 pending writes 里 __interrupt__
-channel」在真实存储后端上同样可读——这是 InMemorySaver 覆盖不到的存储格式差异。
+上游单元测试（test_checkpoint_state_reader.py）用 InMemorySaver 覆盖了该语义；
+本集成测试用真实 PostgreSQL 的 AsyncPostgresSaver 验证「持久化的 pending writes 里
+__interrupt__ channel」在真实存储后端上同样可读——这是 InMemorySaver 覆盖不到的
+存储格式差异，也是本项目现有集成测试（只验快照读取与用户隔离）未覆盖的角度。
 """
 
 from __future__ import annotations
@@ -63,7 +64,7 @@ async def test_pending_interrupt_recovered_from_real_postgres_checkpoint(monkeyp
         async for _ in compiled.astream({"messages": []}, config, stream_mode="values"):
             pass
 
-        interrupt_info = await svc._read_pending_interrupt(uid=uid, thread_id=thread_id)
+        _values, interrupt_info = await svc._read_checkpoint_state(uid=uid, thread_id=thread_id)
 
         assert interrupt_info is not None
         assert interrupt_info.value == {"question": "是否允许执行该命令？", "tool": "execute"}
@@ -92,6 +93,8 @@ async def test_completed_checkpoint_returns_no_interrupt(monkeypatch):
         async for _ in compiled.astream({"messages": []}, config, stream_mode="values"):
             pass
 
-        assert await svc._read_pending_interrupt(uid=uid, thread_id=thread_id) is None
+        _values, interrupt_info = await svc._read_checkpoint_state(uid=uid, thread_id=thread_id)
+
+        assert interrupt_info is None
 
         await manager.get_langgraph_checkpointer().adelete_thread(thread_id)
