@@ -139,3 +139,16 @@ Context 按 Schema 默认值、持久配置、身份与单次覆盖、工作区�
 
 - Passed：`docker compose exec api uv run --no-sync --group test pytest test/unit/services/test_agent_request_service.py test/unit/services/test_agent_request_queue_service.py -q --tb=short --disable-warnings`，70 passed。旧队头场景在投递时确认事务已提交，回读 A 的 Request/Message 与实际 Run ID 一致；B 保持 queued，重发不增加投递。原有 commit 失败负向测试保留。
 - Not run：真实 PostgreSQL/HTTP 与 E2E 沿用本记录最近的验证缺口：集成清理 HTTP 超时、E2E 的共享 ci-replay 供应商冲突。本次未重复执行相同受阻前置流程。
+
+### 2026-09-15 集成与 E2E 验证
+
+验证环境为默认开发 Compose。知识库清理超时定位到 `knowledge_files` 统计聚合；该表缺少分析统计，执行 `ANALYZE knowledge_files` 后清理恢复。确定性回放服务健康，残留 `ci-replay` 配置指向测试地址且无活跃 Run，清理该测试配置后由 E2E fixture 重新创建。未跳过清理、改写既有知识库内容或替换持久化断言。
+
+首轮相关集成集合为 47 passed、3 failed。主动压缩 fixture 显式配置 `summary_threshold=200`，保持 checkpoint 中 `200 * 1024` 的独立数值断言；审批 flush/heartbeat fixture 返回 `PreparedRunExecution`，保持真实 PostgreSQL 终态、attempt、清理和事件发布断言。生产实现无需修改。
+
+- Passed：`docker compose exec -T api timeout --signal=INT --kill-after=10s 300s uv run --no-sync --group test pytest test/integration/api/test_context_compression_router.py test/integration/services/test_agent_run_lease.py -k 'compress_thread_persists or approval_flush_overlap' -q --tb=short --disable-warnings`，3 passed、23 deselected，14.45 秒。
+- Passed：`docker compose exec -T api timeout --signal=INT --kill-after=10s 600s uv run --no-sync --group test pytest test/integration/api/test_checkpoint_state_view.py test/integration/api/test_agent_request_queue_router.py test/integration/api/test_context_compression_router.py test/integration/services/test_agent_request_queue_concurrency.py test/integration/services/test_agent_run_lease.py test/integration/services/test_scheduled_agent_repository.py -q --tb=short --disable-warnings`，修复后完整集合 50 passed，84.65 秒。
+- Passed：`docker compose exec -T api timeout --signal=INT --kill-after=15s 900s uv run --no-sync --group test pytest test/e2e/test_deterministic_agent_path_e2e.py -q --tb=short --disable-warnings`，10 passed，273.90 秒。覆盖普通请求、SubAgent 模型/审批继承、定时任务、审批恢复、取消、工具审计和附件持久化；回读 PostgreSQL、checkpoint、SSE 与沙盒重建后的文件字节。
+- Passed：`docker compose exec -T api timeout --signal=INT --kill-after=10s 180s uv run --no-sync --group test pytest test/unit -m 'not slow' -q --tb=short --disable-warnings`，2028 passed、53 skipped，30.48 秒。
+- Passed：`python3 scripts/verify_engineering_contracts.py`、`python3 -m unittest scripts.test_verify_engineering_contracts`（62 项）、`pnpm --dir docs run build`、两个修改测试文件的 Ruff check/format 与 `git diff --check`。容器缺少 Ruff 可执行文件，使用后端本地虚拟环境中的 Ruff 检查。
+- Inspected：全新独立 Reviewer 核对两个 fixture 的完整 diff、生产契约和 oracle，未发现放宽断言或掩盖生产回归的问题。确定性回放结果不替代真实模型 provider 校准。

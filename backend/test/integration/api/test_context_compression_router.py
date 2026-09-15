@@ -33,9 +33,6 @@ class _CheckpointState(TypedDict, total=False):
     token_usage: dict[str, Any]
 
 
-_Context = BaseContext
-
-
 async def test_compress_thread_persists_canonical_checkpoint_through_http(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -87,7 +84,7 @@ async def test_compress_thread_persists_canonical_checkpoint_through_http(
 
     class Agent:
         capabilities = ["context_compression"]
-        context_schema = _Context
+        context_schema = BaseContext
 
         async def get_graph(self, *, context):
             assert context.uid == uid
@@ -99,7 +96,11 @@ async def test_compress_thread_persists_canonical_checkpoint_through_http(
             pass
 
         async def get_visible_by_slug(self, **_kwargs):
-            return type("AgentItem", (), {"backend_id": "ChatbotAgent", "config_json": {"context": {}}})()
+            return type(
+                "AgentItem",
+                (),
+                {"backend_id": "ChatbotAgent", "config_json": {"context": {"summary_threshold": 200}}},
+            )()
 
     class Compressor:
         async def aforce_summarize(self, values):
