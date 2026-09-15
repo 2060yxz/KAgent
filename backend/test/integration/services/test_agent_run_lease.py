@@ -244,7 +244,7 @@ async def test_approval_flush_overlap_preserves_terminal_publication(lease_datab
     monkeypatch.setattr(run_worker.pg_manager, "get_async_session_context", lambda: _session_context(session_factory))
     monkeypatch.setattr(run_worker, "_run_owner_token", lambda _ctx: owner)
     monkeypatch.setattr(run_worker, "RUN_HEARTBEAT_SECONDS", 0)
-    monkeypatch.setattr(run_worker, "persist_run_manifest", AsyncMock(return_value={}))
+    monkeypatch.setattr(run_worker, "prepare_and_record_run_execution", AsyncMock(return_value={}))
     monkeypatch.setattr(
         run_worker,
         "_validate_run_workdir_binding",
