@@ -1631,6 +1631,7 @@ defineExpose({
 }
 
 .remote-type-filter {
+  font-size: 12px;
   flex-shrink: 0;
 }
 
