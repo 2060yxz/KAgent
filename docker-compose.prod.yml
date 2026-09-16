@@ -39,7 +39,7 @@ x-api-worker-env: &api-worker-env
 services:
   api:
     ports:
-      - "127.0.0.1:${YUXI_API_PORT:-6050}:5050"
+      - "${YUXI_API_PORT:-6050}:5050"
     build:
       context: .
       dockerfile: docker/api.Dockerfile
@@ -173,7 +173,7 @@ services:
     volumes:
       - ${YUXI_STATE_DIR:-./docker/volumes}/yuxi/threads:/app/user-data
       - ${YUXI_STATE_DIR:-./docker/volumes}/yuxi/skill-projections:/app/skill-projections
-      - ./docker/sandbox_provisioner/sandbox.env:/app/sandbox.env:ro
+      - ${SANDBOX_ENV_FILE:-./docker/sandbox_provisioner/sandbox.env}:/app/sandbox.env:ro
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       app-network:
@@ -213,6 +213,7 @@ services:
       - KUBECONFIG_PATH=${KUBECONFIG_PATH:-}
       - USER_DATA_PVC=${USER_DATA_PVC:-yuxi-user-data}
       - SKILLS_PVC=${SKILLS_PVC:-yuxi-skills}
+    command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8002"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health').read()"]
       interval: 10s
