@@ -1592,6 +1592,9 @@ async def get_agent_state_view(
                 "run_id": latest_run.id,
             }
         if include_relations:
+            # checkpoint 保存模型上下文；页面加载以持久 Run 的身份与状态为准。
+            child_runs = await run_repo.list_subagent_runs_for_conversation(conversation.id, current_uid)
+            response["agent_state"]["subagent_runs"] = [serialize_subagent_run_state(run) for run in child_runs]
             relation = await SubagentThreadRepository(db).get_by_child_conversation_for_user(
                 conversation.id,
                 str(current_uid),
