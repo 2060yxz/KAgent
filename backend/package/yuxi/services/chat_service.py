@@ -23,7 +23,7 @@ from langchain.messages import AIMessage, AIMessageChunk, HumanMessage
 from langgraph.types import Command
 from yuxi.agents.backends.paths import runtime_workdir_path
 from yuxi.agents.base import _json_safe
-from yuxi.agents.buildin import agent_manager
+from yuxi.agents.buildin import get_agent_backend
 from yuxi.agents.callbacks.model_request_timing import FirstModelRequestRecorder
 from yuxi.agents.context import BaseContext
 from yuxi.agents.state import AgentStatePayload
@@ -972,9 +972,7 @@ async def _resolve_agent_runtime(
     if not agent_item:
         raise ValueError("智能体不存在或无权限访问")
 
-    backend = agent_manager.get_agent(agent_item.backend_id)
-    if not backend:
-        raise ValueError(f"智能体后端 {agent_item.backend_id} 不存在")
+    backend = get_agent_backend(agent_item.backend_id)
 
     if agent_item.backend_id != prepared_execution.backend_id:
         raise ValueError("智能体后端在执行准备后发生变化")

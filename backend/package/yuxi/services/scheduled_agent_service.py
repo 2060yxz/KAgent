@@ -14,7 +14,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from yuxi.agents.buildin import agent_manager
+from yuxi.agents.buildin import AgentBackendNotFoundError, get_agent_backend
 from yuxi.agents.tool_approval import normalize_tool_approval_mode
 from yuxi.repositories.agent_repository import AgentRepository
 from yuxi.repositories.project_repository import ProjectRepository
@@ -103,8 +103,10 @@ async def _validate_agent(agent_slug: str, user: User, db: AsyncSession):
     agent = await repo.get_visible_by_slug(slug=agent_slug, user=user, kind="main")
     if not agent:
         raise HTTPException(status_code=404, detail="智能体不存在或不可访问")
-    if not agent_manager.get_agent(agent.backend_id):
-        raise HTTPException(status_code=404, detail="智能体后端不存在")
+    try:
+        get_agent_backend(agent.backend_id)
+    except AgentBackendNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return agent
 
 

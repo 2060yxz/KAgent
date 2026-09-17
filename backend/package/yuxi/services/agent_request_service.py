@@ -13,7 +13,7 @@ from typing import Any
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from yuxi.agents.buildin import agent_manager
+from yuxi.agents.buildin import AgentBackendNotFoundError, get_agent_backend
 from yuxi.repositories.agent_repository import AgentRepository
 from yuxi.repositories.agent_run_repository import AgentRunRepository
 from yuxi.repositories.agent_run_request_repository import AgentRunRequestRepository
@@ -144,9 +144,10 @@ async def submit_agent_request(
             raise HTTPException(status_code=404, detail="Project 不存在或不可访问")
         return await request_view(repo=AgentRunRequestRepository(db), request=existing_request)
 
-    agent_backend = agent_manager.get_agent(agent_item.backend_id)
-    if not agent_backend:
-        raise HTTPException(status_code=404, detail=f"智能体后端 {agent_item.backend_id} 不存在")
+    try:
+        agent_backend = get_agent_backend(agent_item.backend_id)
+    except AgentBackendNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     conversation_repo = ConversationRepository(db)
     project = None

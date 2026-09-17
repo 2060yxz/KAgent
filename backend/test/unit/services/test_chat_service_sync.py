@@ -94,8 +94,8 @@ async def test_resolve_agent_runtime_includes_subagents_only_when_requested(
 
     monkeypatch.setattr(agent_context, "normalize_agent_context_config", normalize)
     monkeypatch.setattr(
-        svc.agent_manager,
-        "get_agent",
+        svc,
+        "get_agent_backend",
         lambda backend_id: SimpleNamespace(context_schema=None) if backend_id == "SubAgentBackend" else None,
     )
 
@@ -1404,7 +1404,7 @@ async def test_execution_does_not_rebuild_missing_snapshot_context(monkeypatch, 
     monkeypatch.setattr(
         svc, "AgentRepository", lambda _db: SimpleNamespace(get_visible_by_slug=AsyncMock(return_value=agent))
     )
-    monkeypatch.setattr(svc.agent_manager, "get_agent", lambda _backend: object())
+    monkeypatch.setattr(svc, "get_agent_backend", lambda _backend: object())
     monkeypatch.setattr(svc, "resolve_conversation_workdir_path", _resolve_test_workdir)
     monkeypatch.setattr(
         agent_context, "normalize_agent_context_config", AsyncMock(side_effect=AssertionError("不得重新解析配置"))

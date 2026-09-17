@@ -13,7 +13,7 @@ from yuxi.agents.mcp.service import (
     get_mcp_server,
     get_mcp_tools_stats,
     is_builtin_mcp_server,
-    requires_mcp_stdio_migration,
+    requires_mcp_transport_migration,
     set_server_enabled,
     toggle_tool_enabled,
     update_mcp_server,
@@ -81,15 +81,15 @@ def serialize_mcp_server(server) -> dict:
     """序列化 MCP，并补充代码内置与迁移状态。"""
     data = server.to_dict()
     data["is_builtin"] = is_builtin_mcp_server(server)
-    data["requires_migration"] = requires_mcp_stdio_migration(server)
+    data["requires_migration"] = requires_mcp_transport_migration(server)
     if data["requires_migration"]:
         data["enabled"] = False
     return data
 
 
 def ensure_mcp_server_runnable(server) -> None:
-    """拒绝连接尚未迁移的历史用户 stdio MCP。"""
-    if requires_mcp_stdio_migration(server):
+    """拒绝连接尚未迁移的非远程 MCP。"""
+    if requires_mcp_transport_migration(server):
         raise HTTPException(status_code=400, detail="历史 stdio MCP 已被禁用，请先迁移为远程 MCP")
 
 
@@ -116,7 +116,7 @@ async def get_mcp_servers(
                     "name": getattr(s, "name", ""),
                     "description": getattr(s, "description", None),
                     "icon": getattr(s, "icon", None),
-                    "enabled": bool(getattr(s, "enabled", True)) and not requires_mcp_stdio_migration(s),
+                    "enabled": bool(getattr(s, "enabled", True)) and not requires_mcp_transport_migration(s),
                     "tags": getattr(s, "tags", None) or [],
                 }
             )

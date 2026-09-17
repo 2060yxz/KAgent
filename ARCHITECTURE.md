@@ -39,7 +39,7 @@ Yuxi 只交付完整知识能力路径。API 始终注册 `external_kb`、`knowl
 
 ### `backend/package/yuxi`
 
-- `agents` 定义 LangGraph 智能体体系。`BaseAgent` 是智能体基类，`BaseContext` 是运行上下文；`buildin/chatbot` 和 `buildin/subagent` 放内置智能体；`middlewares` 组合文件系统、Skills、SubAgent、摘要、审批、模型兼容和用量统计；`toolkits` 管理本地工具；`backends` 对接沙盒、知识库和 Skills 文件系统；`skills` 与 `mcp` 管理扩展能力及其运行时加载。
+- `agents` 定义 LangGraph 智能体体系。`BaseAgent` 是智能体基类，`BaseContext` 是运行上下文；`buildin/chatbot` 和 `buildin/subagent` 放由 `buildin.BUILTIN_BACKENDS` 显式注册、按需创建的无共享运行状态后端；`presets` 按模块发现预置角色定义，由 service 统一初始化、repository 保留既有配置；`middlewares` 组合文件系统、Skills、SubAgent、摘要、审批、模型兼容和用量统计；`toolkits` 管理本地工具；`backends` 对接沙盒、知识库和 Skills 文件系统；`skills` 与 `mcp` 管理扩展能力及其运行时加载。
 - `workspace` 是持久化 UserWorkspace Owner。`paths.py` 拥有 uid、宿主根和数据库 `projects/<managed-name>` 映射，`filesystem.py` 拥有 no-follow 文件原语，`workdir.py` 提供以一个 Project 为根的持久化视图，`preview.py` 拥有 UserWorkspace 文件预览和 runtime 本地 Office 缓存。Agent Backend 单独拥有 `/home/gem/...` runtime 路径。
 - `services` 是用例层。智能体主链路重点分为请求接入与排队、Run 生命周期、运行时配置、worker 执行和 SubAgent 调用；聊天历史、附件、工作区、文件预览、评估、认证和观测等跨模块流程也从这里找入口。
 - `repositories` 是 PostgreSQL 访问边界，封装业务对象、知识库元数据、AgentRun、请求队列、Task 和扩展配置查询。路由不应绕过 repository 直接拼装持久化逻辑。
